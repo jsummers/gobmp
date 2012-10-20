@@ -23,6 +23,10 @@ type encoder struct {
 	dstBitCount   int
 	dstBitsOffset int
 	dstFileSize   int
+
+	writePaletted bool
+	paletted      *image.Paletted
+	nColors       int // Number of colors in palette; 0 if no palette
 }
 
 func setWORD(b []byte, n uint16) {
@@ -55,6 +59,7 @@ func (e *encoder) generateInfoHeader(h []byte) {
 	setDWORD(h[20:24], uint32(e.dstBitsSize))
 	setDWORD(h[24:28], 2835) // biXPelsPerMeter
 	setDWORD(h[28:32], 2835) // biYPelsPerMeter
+	setDWORD(h[32:36], uint32(e.nColors))
 }
 
 func (e *encoder) writeHeaders() error {
@@ -67,8 +72,30 @@ func (e *encoder) writeHeaders() error {
 	return err
 }
 
-// Read a row from the source image, and store it in rowBuf in BMP format
-func (e *encoder) generateRow(j int, rowBuf []byte) {
+func (e *encoder) writePalette() error {
+	if !e.writePaletted {
+		return nil
+	}
+
+	pal := make([]uint8, 4*e.nColors)
+	for i := 0; i < e.nColors; i++ {
+		r, g, b, _ := e.paletted.Palette[i].RGBA()
+		pal[4*i+0] = uint8(b >> 8)
+		pal[4*i+1] = uint8(g >> 8)
+		pal[4*i+2] = uint8(r >> 8)
+	}
+
+	_, err := e.w.Write(pal)
+	return err
+}
+
+// Read a row from the source image, and store it in rowBuf in 8-bit BMP format
+func generateRow_8(e *encoder, j int, rowBuf []byte) {
+	copy(rowBuf[0:e.width], e.paletted.Pix[j*e.paletted.Stride:])
+}
+
+// Read a row from the source image, and store it in rowBuf in 24-bit BMP format
+func generateRow_24(e *encoder, j int, rowBuf []byte) {
 	for i := 0; i < e.width; i++ {
 		srcclr := e.m.At(e.srcBounds.Min.X+i, e.srcBounds.Min.Y+j)
 		r, g, b, _ := srcclr.RGBA()
@@ -80,11 +107,18 @@ func (e *encoder) generateRow(j int, rowBuf []byte) {
 
 func (e *encoder) writeBits() error {
 	var err error
+	var genRowFunc func(e *encoder, j int, rowBuf []byte)
+
+	if e.writePaletted {
+		genRowFunc = generateRow_8
+	} else {
+		genRowFunc = generateRow_24
+	}
 
 	rowBuf := make([]byte, e.dstStride)
 
 	for j := 0; j < e.height; j++ {
-		e.generateRow(e.height-j-1, rowBuf)
+		genRowFunc(e, e.height-j-1, rowBuf)
 		_, err = e.w.Write(rowBuf)
 		if err != nil {
 			return err
@@ -93,14 +127,36 @@ func (e *encoder) writeBits() error {
 	return nil
 }
 
+// If the image can be written as a paletted image, sets e.writePaletted
+// to true (and sets e.paletted, e.nColors).
+func (e *encoder) checkPaletted() {
+	e.paletted, _ = e.m.(*image.Paletted)
+	if e.paletted == nil {
+		return
+	}
+
+	e.nColors = len(e.paletted.Palette)
+	if e.nColors < 1 || e.nColors > 256 {
+		e.nColors = 0
+		return
+	}
+
+	e.writePaletted = true
+}
+
 // Figure out the vital statistics of the target image.
 func (e *encoder) strategize() error {
 	e.srcBounds = e.m.Bounds()
 	e.width = e.srcBounds.Max.X - e.srcBounds.Min.X
 	e.height = e.srcBounds.Max.Y - e.srcBounds.Min.Y
-	e.dstBitCount = 24
+	e.checkPaletted()
+	if e.writePaletted {
+		e.dstBitCount = 8
+	} else {
+		e.dstBitCount = 24
+	}
 	e.dstStride = ((e.width*e.dstBitCount + 31) / 32) * 4
-	e.dstBitsOffset = 14 + 40
+	e.dstBitsOffset = 14 + 40 + 4*e.nColors
 	e.dstBitsSize = e.height * e.dstStride
 	e.dstFileSize = e.dstBitsOffset + e.dstBitsSize
 	return nil
@@ -120,6 +176,11 @@ func Encode(w io.Writer, m image.Image) error {
 	}
 
 	err = e.writeHeaders()
+	if err != nil {
+		return err
+	}
+
+	err = e.writePalette()
 	if err != nil {
 		return err
 	}
