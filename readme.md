@@ -32,8 +32,8 @@ Status
 The encoder writes all images as 24-bit truecolor images. I plan to update
 it to write paletted images in some cases.
 
-The decoder supports BMP version 3 uncompressed files with 1, 4, 8, or 24
-bits per pixel. I plan to update it to support nearly all BMP image formats.
+The decoder supports uncompressed images with 1, 4, 8, or 24 bits per pixel.
+I plan to update it to support nearly all BMP image formats.
 
 
 License

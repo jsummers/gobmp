@@ -230,10 +230,6 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 		return nil
 	}
 	d.biCompression = getDWORD(h[16:20])
-	if d.biCompression != bI_RGB && d.biCompression != bI_RLE4 &&
-		d.biCompression != bI_RLE8 && d.biCompression != bI_BITFIELDS {
-		return UnsupportedError(fmt.Sprintf("compression or image type %d", d.biCompression))
-	}
 	if d.biCompression == bI_BITFIELDS && d.headerSize == 40 {
 		d.hasBitfieldsSegment = true
 		d.bitFieldsSize = 12
@@ -278,6 +274,10 @@ func readInfoHeader(d *decoder, decodeFn decodeInfoHeaderFuncType, configOnly bo
 	}
 	if d.height < 1 {
 		return FormatError(fmt.Sprintf("bad height %d", d.height))
+	}
+	if d.biCompression != bI_RGB && d.biCompression != bI_RLE4 &&
+		d.biCompression != bI_RLE8 && d.biCompression != bI_BITFIELDS {
+		return UnsupportedError(fmt.Sprintf("compression or image type %d", d.biCompression))
 	}
 
 	if d.bitCount >= 1 && d.bitCount <= 8 {
@@ -344,7 +344,7 @@ func (d *decoder) readHeaders(configOnly bool) error {
 	switch d.headerSize {
 	case 12:
 		err = readInfoHeader(d, decodeInfoHeader12, configOnly)
-	case 40:
+	case 40, 108, 124:
 		err = readInfoHeader(d, decodeInfoHeader40, configOnly)
 	default:
 		return UnsupportedError(fmt.Sprintf("BMP version (header size %d)", d.headerSize))
@@ -398,8 +398,10 @@ func Decode(r io.Reader) (image.Image, error) {
 	}
 	switch d.bitCount {
 	case 1, 4, 8, 24:
-	default:
+	case 0, 16, 32:
 		return nil, UnsupportedError(fmt.Sprintf("bit count %d", d.bitCount))
+	default:
+		return nil, FormatError(fmt.Sprintf("bit count %d", d.bitCount))
 	}
 
 	if d.srcPalNumEntries > 0 {
