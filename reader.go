@@ -21,6 +21,12 @@ const (
 	bI_BITFIELDS = 3
 )
 
+type bitFieldsInfo struct {
+	mask  uint32
+	shift uint
+	scale float64 // Amount to multiply the sample value by, to scale it to [0..255]
+}
+
 type decoder struct {
 	r io.Reader
 
@@ -33,6 +39,7 @@ type decoder struct {
 	height        int
 	bitCount      int
 	biCompression uint32
+	isTopDown     bool
 
 	srcPalNumEntries    int
 	srcPalBytesPerEntry int
@@ -41,9 +48,10 @@ type decoder struct {
 	dstHasPalette       bool
 	dstPalette          color.Palette
 
-	hasBitfieldsSegment bool
-	bitFieldsSize       int
-	isTopDown           bool
+	hasBitFieldsSegment  bool
+	bitFieldsSegmentSize int
+	bitFields            [4]bitFieldsInfo
+	bitFieldsValid       bool // Is .bitFields set?
 }
 
 // An UnsupportedError reports that the input uses a valid but unimplemented
@@ -108,6 +116,28 @@ func decodeRow_8(d *decoder, buf []byte, j int) error {
 	return nil
 }
 
+func decodeRow_16or32(d *decoder, buf []byte, j int) error {
+	for i := 0; i < d.width; i++ {
+		var v uint32
+		if d.bitCount == 16 {
+			v = uint32(getWORD(buf[i*2 : i*2+2]))
+		} else { // bitCount == 32
+			v = getDWORD(buf[i*4 : i*4+4])
+		}
+		for k := 0; k < 4; k++ {
+			var sv uint8
+			if d.bitFields[k].mask == 0 {
+				sv = 255
+			} else {
+				sv = uint8(0.5 + float64((v&d.bitFields[k].mask)>>d.bitFields[k].shift)*
+					d.bitFields[k].scale)
+			}
+			d.img_NRGBA.Pix[j*d.img_NRGBA.Stride+i*4+k] = sv
+		}
+	}
+	return nil
+}
+
 func decodeRow_24(d *decoder, buf []byte, j int) error {
 	for i := 0; i < d.width; i++ {
 		var r, g, b byte
@@ -142,6 +172,18 @@ func (d *decoder) readBits() error {
 		decodeRowFunc = decodeRow_8
 	case 24:
 		decodeRowFunc = decodeRow_24
+	case 16:
+		if !d.bitFieldsValid {
+			// Default bitfields for 16-bit images:
+			d.recordBitFields(0x7c00, 0x03e0, 0x001f, 0)
+		}
+		decodeRowFunc = decodeRow_16or32
+	case 32:
+		if !d.bitFieldsValid {
+			// Default bitfields for 32-bit images:
+			d.recordBitFields(0x00ff0000, 0x0000ff00, 0x000000ff, 0)
+		}
+		decodeRowFunc = decodeRow_16or32
 	default:
 		return nil
 	}
@@ -188,7 +230,7 @@ func (d *decoder) skipBytes(n int) error {
 func (d *decoder) readGap() error {
 	var currentOffset int
 	var gapSize int
-	currentOffset = 14 + int(d.headerSize) + d.bitFieldsSize + d.srcPalSizeInBytes
+	currentOffset = 14 + int(d.headerSize) + d.bitFieldsSegmentSize + d.srcPalSizeInBytes
 
 	if currentOffset == int(d.bfOffBits) {
 		return nil
@@ -231,8 +273,8 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 	}
 	d.biCompression = getDWORD(h[16:20])
 	if d.biCompression == bI_BITFIELDS && d.headerSize == 40 {
-		d.hasBitfieldsSegment = true
-		d.bitFieldsSize = 12
+		d.hasBitFieldsSegment = true
+		d.bitFieldsSegmentSize = 12
 	}
 
 	biClrUsed := getDWORD(h[32:36])
@@ -251,6 +293,20 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 		d.srcPalNumEntries = int(biClrUsed)
 	}
 
+	return nil
+}
+
+func decodeInfoHeader108(d *decoder, h []byte, configOnly bool) error {
+	var err error
+	err = decodeInfoHeader40(d, h[:40], configOnly)
+	if err != nil {
+		return err
+	}
+
+	if d.biCompression == bI_BITFIELDS {
+		d.recordBitFields(getDWORD(h[40:44]), getDWORD(h[44:48]),
+			getDWORD(h[48:52]), getDWORD(h[52:56]))
+	}
 	return nil
 }
 
@@ -275,15 +331,46 @@ func readInfoHeader(d *decoder, decodeFn decodeInfoHeaderFuncType, configOnly bo
 	if d.height < 1 {
 		return FormatError(fmt.Sprintf("bad height %d", d.height))
 	}
-	if d.biCompression != bI_RGB && d.biCompression != bI_RLE4 &&
-		d.biCompression != bI_RLE8 && d.biCompression != bI_BITFIELDS {
-		return UnsupportedError(fmt.Sprintf("compression or image type %d", d.biCompression))
-	}
 
 	if d.bitCount >= 1 && d.bitCount <= 8 {
 		d.dstHasPalette = true
 	}
 
+	return nil
+}
+
+func (d *decoder) recordBitFields(r, g, b, a uint32) {
+	d.bitFieldsValid = true
+	d.bitFields[0].mask = r
+	d.bitFields[1].mask = g
+	d.bitFields[2].mask = b
+	d.bitFields[3].mask = a
+
+	// Based on .mask, set the other fields of the bitFields struct
+	for k := 0; k < 4; k++ {
+		if d.bitFields[k].mask == 0 {
+			continue
+		}
+
+		// Starting with the low bit, count the number of 0 bits before
+		// the first 1 bit.
+		tmpMask := d.bitFields[k].mask
+		for tmpMask&0x1 == 0 {
+			d.bitFields[k].shift++
+			tmpMask >>= 1
+		}
+		d.bitFields[k].scale = 255.0 / float64(tmpMask)
+	}
+}
+
+func (d *decoder) readBitFieldsSegment() error {
+	buf := make([]byte, d.bitFieldsSegmentSize)
+	_, err := io.ReadFull(d.r, buf[:])
+	if err != nil {
+		return err
+	}
+	d.recordBitFields(getDWORD(buf[0:4]), getDWORD(buf[4:8]),
+		getDWORD(buf[8:12]), 0)
 	return nil
 }
 
@@ -344,8 +431,10 @@ func (d *decoder) readHeaders(configOnly bool) error {
 	switch d.headerSize {
 	case 12:
 		err = readInfoHeader(d, decodeInfoHeader12, configOnly)
-	case 40, 108, 124:
+	case 40:
 		err = readInfoHeader(d, decodeInfoHeader40, configOnly)
+	case 108, 124:
+		err = readInfoHeader(d, decodeInfoHeader108, configOnly)
 	default:
 		return UnsupportedError(fmt.Sprintf("BMP version (header size %d)", d.headerSize))
 	}
@@ -393,15 +482,28 @@ func Decode(r io.Reader) (image.Image, error) {
 		return nil, err
 	}
 
-	if d.biCompression != bI_RGB {
-		return nil, UnsupportedError(fmt.Sprintf("compression or image type %d", d.biCompression))
-	}
 	switch d.bitCount {
-	case 1, 4, 8, 24:
-	case 0, 16, 32:
+	case 1, 4, 8, 16, 24, 32:
+	case 0:
 		return nil, UnsupportedError(fmt.Sprintf("bit count %d", d.bitCount))
 	default:
-		return nil, FormatError(fmt.Sprintf("bit count %d", d.bitCount))
+		return nil, FormatError(fmt.Sprintf("bad bit count %d", d.bitCount))
+	}
+	switch d.biCompression {
+	case bI_RGB:
+	case bI_BITFIELDS:
+		if d.bitCount != 16 && d.bitCount != 32 {
+			return nil, FormatError(fmt.Sprintf("bad BITFIELDS bit count %d", d.bitCount))
+		}
+	default:
+		return nil, UnsupportedError(fmt.Sprintf("compression or image type %d", d.biCompression))
+	}
+
+	if d.hasBitFieldsSegment {
+		err = d.readBitFieldsSegment()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if d.srcPalNumEntries > 0 {
