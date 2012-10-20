@@ -29,8 +29,8 @@ Or, after installing, type:
 Status
 ------
 
-The encoder can write 8-bit or 24-bit uncompressed images. Support for 1-bit
-and 4-bit paletted images is planned.
+The images written by the encoder will be 1, 4, 8, or 24-bit uncompressed
+images. There are no plans to support other image types.
 
 The decoder supports most uncompressed BMP images. I plan to update it to
 support nearly all BMP image formats.

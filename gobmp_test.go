@@ -102,6 +102,8 @@ type encodeTestType struct {
 var encodeTests = []encodeTestType{
 	{"rgb8a.png", "rgb8a.bmp", "rgb8a.bmp"},
 	{"p8.png", "p8.bmp", "p8.bmp"},
+	{"p2.png", "p2.bmp", "p2.bmp"},
+	{"p1.png", "p1.bmp", "p1.bmp"},
 }
 
 func TestEncode(t *testing.T) {

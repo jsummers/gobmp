@@ -89,6 +89,30 @@ func (e *encoder) writePalette() error {
 	return err
 }
 
+func generateRow_1(e *encoder, j int, rowBuf []byte) {
+	for i := range rowBuf {
+		rowBuf[i] = 0
+	}
+	for i := 0; i < e.width; i++ {
+		if e.paletted.Pix[j*e.paletted.Stride+i] != 0 {
+			rowBuf[i/8] |= uint8(1 << uint(7-i%8))
+		}
+	}
+}
+
+func generateRow_4(e *encoder, j int, rowBuf []byte) {
+	for i := range rowBuf {
+		rowBuf[i] = 0
+	}
+	for i := 0; i < e.width; i++ {
+		v := e.paletted.Pix[j*e.paletted.Stride+i]
+		if i%2 == 0 {
+			v <<= 4
+		}
+		rowBuf[i/2] |= v
+	}
+}
+
 // Read a row from the source image, and store it in rowBuf in 8-bit BMP format
 func generateRow_8(e *encoder, j int, rowBuf []byte) {
 	copy(rowBuf[0:e.width], e.paletted.Pix[j*e.paletted.Stride:])
@@ -110,7 +134,14 @@ func (e *encoder) writeBits() error {
 	var genRowFunc func(e *encoder, j int, rowBuf []byte)
 
 	if e.writePaletted {
-		genRowFunc = generateRow_8
+		switch e.dstBitCount {
+		case 1:
+			genRowFunc = generateRow_1
+		case 4:
+			genRowFunc = generateRow_4
+		default:
+			genRowFunc = generateRow_8
+		}
 	} else {
 		genRowFunc = generateRow_24
 	}
@@ -151,7 +182,13 @@ func (e *encoder) strategize() error {
 	e.height = e.srcBounds.Max.Y - e.srcBounds.Min.Y
 	e.checkPaletted()
 	if e.writePaletted {
-		e.dstBitCount = 8
+		if e.nColors <= 2 {
+			e.dstBitCount = 1
+		} else if e.nColors <= 16 {
+			e.dstBitCount = 4
+		} else {
+			e.dstBitCount = 8
+		}
 	} else {
 		e.dstBitCount = 24
 	}
