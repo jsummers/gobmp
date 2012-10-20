@@ -180,6 +180,7 @@ var decodeTests = []decodeTestType{
 	{"pal4.bmp", "pal4.png", "pal4.png"},
 	{"pal1bg.bmp", "pal1bg.png", "pal1bg.png"},
 	{"pal8offs.bmp", "pal8offs.png", "pal8.png"},
+	{"pal8os2.bmp", "pal8os2.png", "pal8os2.png"},
 }
 
 func TestDecode(t *testing.T) {

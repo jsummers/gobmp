@@ -203,21 +203,27 @@ func (d *decoder) readGap() error {
 
 type decodeInfoHeaderFuncType func(d *decoder, h []byte, configOnly bool) error
 
+// Read a 12-byte BITMAPCOREHEADER.
+func decodeInfoHeader12(d *decoder, h []byte, configOnly bool) error {
+	d.width = int(getWORD(h[4:6]))
+	d.height = int(getWORD(h[6:8]))
+	d.bitCount = int(getWORD(h[10:12]))
+	d.srcPalBytesPerEntry = 3
+	if d.bitCount >= 1 && d.bitCount <= 8 {
+		d.srcPalNumEntries = 1 << uint(d.bitCount)
+	}
+	return nil
+}
+
 // Read a 40-byte BITMAPINFOHEADER.
 // Use of this function does not imply that the entire header is 40 bytes.
 // We may just be decoding the first 40 bytes of a 108- or 124-byte header.
 func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 	d.width = int(int32(getDWORD(h[4:8])))
-	if d.width < 1 {
-		return FormatError(fmt.Sprintf("bad width %d", d.width))
-	}
 	d.height = int(int32(getDWORD(h[8:12])))
 	if d.height < 0 {
 		d.isTopDown = true
 		d.height = -d.height
-	}
-	if d.height < 1 {
-		return FormatError(fmt.Sprintf("bad height %d", d.height))
 	}
 	d.bitCount = int(getWORD(h[14:16]))
 	if configOnly {
@@ -266,6 +272,12 @@ func readInfoHeader(d *decoder, decodeFn decodeInfoHeaderFuncType, configOnly bo
 	err = decodeFn(d, h, configOnly)
 	if err != nil {
 		return err
+	}
+	if d.width < 1 {
+		return FormatError(fmt.Sprintf("bad width %d", d.width))
+	}
+	if d.height < 1 {
+		return FormatError(fmt.Sprintf("bad height %d", d.height))
 	}
 
 	if d.bitCount >= 1 && d.bitCount <= 8 {
@@ -330,6 +342,8 @@ func (d *decoder) readHeaders(configOnly bool) error {
 	d.headerSize = getDWORD(fh[14:18])
 
 	switch d.headerSize {
+	case 12:
+		err = readInfoHeader(d, decodeInfoHeader12, configOnly)
 	case 40:
 		err = readInfoHeader(d, decodeInfoHeader40, configOnly)
 	default:
