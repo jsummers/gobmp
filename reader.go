@@ -154,7 +154,7 @@ func decodeRow_24(d *decoder, buf []byte, j int) error {
 
 type decodeRowFuncType func(d *decoder, buf []byte, j int) error
 
-func (d *decoder) readBits() error {
+func (d *decoder) readBitsUncompressed() error {
 	var decodeRowFunc decodeRowFuncType
 	var srcRowStride int
 	var err error
@@ -491,6 +491,14 @@ func Decode(r io.Reader) (image.Image, error) {
 	}
 	switch d.biCompression {
 	case bI_RGB:
+	case bI_RLE4:
+		if d.bitCount != 4 {
+			return nil, FormatError(fmt.Sprintf("bad RLE4 bit count %d", d.bitCount))
+		}
+	case bI_RLE8:
+		if d.bitCount != 8 {
+			return nil, FormatError(fmt.Sprintf("bad RLE8 bit count %d", d.bitCount))
+		}
 	case bI_BITFIELDS:
 		if d.bitCount != 16 && d.bitCount != 32 {
 			return nil, FormatError(fmt.Sprintf("bad BITFIELDS bit count %d", d.bitCount))
@@ -529,7 +537,11 @@ func Decode(r io.Reader) (image.Image, error) {
 		return nil, err
 	}
 
-	err = d.readBits()
+	if d.biCompression == bI_RLE4 || d.biCompression == bI_RLE8 {
+		err = d.readBitsRLE()
+	} else {
+		err = d.readBitsUncompressed()
+	}
 	if err != nil {
 		return nil, err
 	}

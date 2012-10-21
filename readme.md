@@ -29,11 +29,10 @@ Or, after installing, type:
 Status
 ------
 
-The images written by the encoder will be 1, 4, 8, or 24-bit uncompressed
-images. There are no plans to support other image types.
+The decoder supports almost all types of BMP images.
 
-The decoder supports most uncompressed BMP images. I plan to update it to
-support nearly all BMP image formats.
+The images written by the encoder will be 1, 4, 8, or 24-bit uncompressed
+images.
 
 
 License
