@@ -498,6 +498,10 @@ func Decode(r io.Reader) (image.Image, error) {
 	default:
 		return nil, UnsupportedError(fmt.Sprintf("compression or image type %d", d.biCompression))
 	}
+	// If 'int' is 32 bits, an NRGBA image can't handle more than (2^31-1)/4 pixels.
+	if d.width > 46340 || d.height > 46340 || d.width*d.height >= 0x20000000 {
+		return nil, UnsupportedError("dimensions too large")
+	}
 
 	if d.hasBitFieldsSegment {
 		err = d.readBitFieldsSegment()
