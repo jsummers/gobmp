@@ -84,6 +84,10 @@ func (d *decoder) readBitsRLE() error {
 			return FormatError("palette index out of range")
 		}
 
+		if rle.ypos < 0 || (rle.ypos == 0 && rle.xpos >= d.width) {
+			break // Reached the end of the target image; may as well stop
+		}
+
 		// If there aren't at least 2 bytes available, read more data
 		// from the file.
 		if rle.bufUsed-rle.bufPos < 2 {
