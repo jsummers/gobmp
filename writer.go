@@ -175,11 +175,11 @@ func (e *encoder) checkPaletted() {
 	e.writePaletted = true
 }
 
-// Figure out the vital statistics of the target image.
+// Plot out the structure of the file that we're going to write.
 func (e *encoder) strategize() error {
 	e.srcBounds = e.m.Bounds()
-	e.width = e.srcBounds.Max.X - e.srcBounds.Min.X
-	e.height = e.srcBounds.Max.Y - e.srcBounds.Min.Y
+	e.width = e.srcBounds.Dx()
+	e.height = e.srcBounds.Dy()
 	e.checkPaletted()
 	if e.writePaletted {
 		if e.nColors <= 2 {

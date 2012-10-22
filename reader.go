@@ -477,20 +477,19 @@ func Decode(r io.Reader) (image.Image, error) {
 
 	d := new(decoder)
 	d.r = r
+
+	// Read the FILEHEADER and INFOHEADER.
 	err = d.readHeaders(false)
 	if err != nil {
 		return nil, err
 	}
 
-	switch d.bitCount {
-	case 1, 4, 8, 16, 24, 32:
-	case 0:
-		return nil, UnsupportedError(fmt.Sprintf("bit count %d", d.bitCount))
-	default:
-		return nil, FormatError(fmt.Sprintf("bad bit count %d", d.bitCount))
-	}
 	switch d.biCompression {
 	case bI_RGB:
+		if d.bitCount != 1 && d.bitCount != 4 && d.bitCount != 8 && d.bitCount != 16 &&
+			d.bitCount != 24 && d.bitCount != 32 {
+			return nil, FormatError(fmt.Sprintf("bad bit count %d", d.bitCount))
+		}
 	case bI_RLE4:
 		if d.bitCount != 4 {
 			return nil, FormatError(fmt.Sprintf("bad RLE4 bit count %d", d.bitCount))
@@ -511,6 +510,7 @@ func Decode(r io.Reader) (image.Image, error) {
 		return nil, UnsupportedError("dimensions too large")
 	}
 
+	// Read the BITFIELDS segment, if present.
 	if d.hasBitFieldsSegment {
 		err = d.readBitFieldsSegment()
 		if err != nil {
@@ -518,6 +518,7 @@ func Decode(r io.Reader) (image.Image, error) {
 		}
 	}
 
+	// Read the palette, if present.
 	if d.srcPalNumEntries > 0 {
 		err = d.readPalette()
 		if err != nil {
@@ -525,18 +526,20 @@ func Decode(r io.Reader) (image.Image, error) {
 		}
 	}
 
-	// Create the target image
+	// Create the target image.
 	if d.dstHasPalette {
 		d.img_Paletted = image.NewPaletted(image.Rect(0, 0, d.width, d.height), d.dstPalette)
 	} else {
 		d.img_NRGBA = image.NewNRGBA(image.Rect(0, 0, d.width, d.height))
 	}
 
+	// Skip over any unused space preceding the bitmap bits.
 	err = d.readGap()
 	if err != nil {
 		return nil, err
 	}
 
+	// Read the bitmap bits.
 	if d.biCompression == bI_RLE4 || d.biCompression == bI_RLE8 {
 		err = d.readBitsRLE()
 	} else {
