@@ -12,8 +12,9 @@ import "image"
 import "io"
 
 type encoder struct {
-	w io.Writer
-	m image.Image
+	w            io.Writer
+	m            image.Image
+	m_AsPaletted *image.Paletted
 
 	srcBounds     image.Rectangle
 	width         int
@@ -25,7 +26,7 @@ type encoder struct {
 	dstFileSize   int
 
 	writePaletted bool
-	paletted      *image.Paletted
+	srcIsGray     bool
 	nColors       int // Number of colors in palette; 0 if no palette
 }
 
@@ -79,7 +80,14 @@ func (e *encoder) writePalette() error {
 
 	pal := make([]uint8, 4*e.nColors)
 	for i := 0; i < e.nColors; i++ {
-		r, g, b, _ := e.paletted.Palette[i].RGBA()
+		var r, g, b uint32
+		if e.srcIsGray {
+			// Manufacture a grayscale palette.
+			r = uint32(i) << 8
+			g, b = r, r
+		} else {
+			r, g, b, _ = e.m_AsPaletted.Palette[i].RGBA()
+		}
 		pal[4*i+0] = uint8(b >> 8)
 		pal[4*i+1] = uint8(g >> 8)
 		pal[4*i+2] = uint8(r >> 8)
@@ -89,23 +97,27 @@ func (e *encoder) writePalette() error {
 	return err
 }
 
+// Read a row from the (paletted) source image, and store it in rowBuf in 1-bit
+// BMP format.
 func generateRow_1(e *encoder, j int, rowBuf []byte) {
 	for i := range rowBuf {
 		rowBuf[i] = 0
 	}
 	for i := 0; i < e.width; i++ {
-		if e.paletted.Pix[j*e.paletted.Stride+i] != 0 {
+		if e.m_AsPaletted.Pix[j*e.m_AsPaletted.Stride+i] != 0 {
 			rowBuf[i/8] |= uint8(1 << uint(7-i%8))
 		}
 	}
 }
 
+// Read a row from the (paletted) source image, and store it in rowBuf in 4-bit
+// BMP format.
 func generateRow_4(e *encoder, j int, rowBuf []byte) {
 	for i := range rowBuf {
 		rowBuf[i] = 0
 	}
 	for i := 0; i < e.width; i++ {
-		v := e.paletted.Pix[j*e.paletted.Stride+i]
+		v := e.m_AsPaletted.Pix[j*e.m_AsPaletted.Stride+i]
 		if i%2 == 0 {
 			v <<= 4
 		}
@@ -113,9 +125,20 @@ func generateRow_4(e *encoder, j int, rowBuf []byte) {
 	}
 }
 
-// Read a row from the source image, and store it in rowBuf in 8-bit BMP format
+// Read a row from the (paletted) source image, and store it in rowBuf in 8-bit
+// BMP format.
 func generateRow_8(e *encoder, j int, rowBuf []byte) {
-	copy(rowBuf[0:e.width], e.paletted.Pix[j*e.paletted.Stride:])
+	copy(rowBuf[0:e.width], e.m_AsPaletted.Pix[j*e.m_AsPaletted.Stride:])
+}
+
+// Read a row from the (grayscale) source image, and store it in rowBuf in
+// 8-bit BMP format.
+func generateRow_GrayPal(e *encoder, j int, rowBuf []byte) {
+	for i := 0; i < e.width; i++ {
+		srcclr := e.m.At(e.srcBounds.Min.X+i, e.srcBounds.Min.Y+j)
+		r, _, _, _ := srcclr.RGBA()
+		rowBuf[i] = uint8(r >> 8)
+	}
 }
 
 // Read a row from the source image, and store it in rowBuf in 24-bit BMP format
@@ -134,13 +157,17 @@ func (e *encoder) writeBits() error {
 	var genRowFunc func(e *encoder, j int, rowBuf []byte)
 
 	if e.writePaletted {
-		switch e.dstBitCount {
-		case 1:
-			genRowFunc = generateRow_1
-		case 4:
-			genRowFunc = generateRow_4
-		default:
-			genRowFunc = generateRow_8
+		if e.srcIsGray {
+			genRowFunc = generateRow_GrayPal
+		} else {
+			switch e.dstBitCount {
+			case 1:
+				genRowFunc = generateRow_1
+			case 4:
+				genRowFunc = generateRow_4
+			default:
+				genRowFunc = generateRow_8
+			}
 		}
 	} else {
 		genRowFunc = generateRow_24
@@ -159,20 +186,23 @@ func (e *encoder) writeBits() error {
 }
 
 // If the image can be written as a paletted image, sets e.writePaletted
-// to true (and sets e.paletted, e.nColors).
+// to true, and sets related fields.
 func (e *encoder) checkPaletted() {
-	e.paletted, _ = e.m.(*image.Paletted)
-	if e.paletted == nil {
-		return
+	switch e.m.(type) {
+	case *image.Paletted:
+		e.m_AsPaletted = e.m.(*image.Paletted)
+		e.nColors = len(e.m_AsPaletted.Palette)
+		if e.nColors < 1 || e.nColors > 256 {
+			e.m_AsPaletted = nil
+			e.nColors = 0
+			return
+		}
+		e.writePaletted = true
+	case *image.Gray, *image.Gray16:
+		e.srcIsGray = true
+		e.writePaletted = true
+		e.nColors = 256
 	}
-
-	e.nColors = len(e.paletted.Palette)
-	if e.nColors < 1 || e.nColors > 256 {
-		e.nColors = 0
-		return
-	}
-
-	e.writePaletted = true
 }
 
 // Plot out the structure of the file that we're going to write.

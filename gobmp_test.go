@@ -104,6 +104,8 @@ var encodeTests = []encodeTestType{
 	{"p8.png", "p8.bmp", "p8.bmp"},
 	{"p2.png", "p2.bmp", "p2.bmp"},
 	{"p1.png", "p1.bmp", "p1.bmp"},
+	{"g8.png", "g8.bmp", "g8.bmp"},
+	{"g16.png", "g16.bmp", "g16.bmp"},
 }
 
 func TestEncode(t *testing.T) {
