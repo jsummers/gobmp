@@ -40,7 +40,8 @@ func readImageFromFile(t *testing.T, srcFilename string) image.Image {
 	return srcImg
 }
 
-func writeImageToFile(t *testing.T, img image.Image, dstFilename string, fileFmt string) {
+func writeImageToFile(t *testing.T, img image.Image, dstFilename string, fileFmt string,
+	bmpOpts *EncoderOptions) {
 	var err error
 
 	file, err := os.Create(dstFilename)
@@ -54,7 +55,11 @@ func writeImageToFile(t *testing.T, img image.Image, dstFilename string, fileFmt
 	if fileFmt == "png" {
 		err = png.Encode(file, img)
 	} else {
-		err = Encode(file, img)
+		if bmpOpts != nil {
+			err = EncodeWithOptions(file, img, bmpOpts)
+		} else {
+			err = Encode(file, img)
+		}
 	}
 	if err != nil {
 		t.Logf("%s\n", err.Error())
@@ -96,27 +101,37 @@ func compareFiles(t *testing.T, expectedFN string, actualFN string) {
 }
 
 type encodeTestType struct {
+	testId                   int
 	srcFN, dstFN, expectedFN string
 }
 
 var encodeTests = []encodeTestType{
-	{"rgb8a.png", "rgb8a.bmp", "rgb8a.bmp"},
-	{"p8.png", "p8.bmp", "p8.bmp"},
-	{"p2.png", "p2.bmp", "p2.bmp"},
-	{"p1.png", "p1.bmp", "p1.bmp"},
-	{"g8.png", "g8.bmp", "g8.bmp"},
-	{"g16.png", "g16.bmp", "g16.bmp"},
+	{10, "rgb8a.png", "rgb8a.bmp", "rgb8a.bmp"},
+	{20, "p8.png", "p8.bmp", "p8.bmp"},
+	{30, "p2.png", "p2.bmp", "p2.bmp"},
+	{40, "p1.png", "p1.bmp", "p1.bmp"},
+	{50, "g8.png", "g8.bmp", "g8.bmp"},
+	{60, "g16.png", "g16.bmp", "g16.bmp"},
 }
 
 func TestEncode(t *testing.T) {
 	var m image.Image
+	var opts *EncoderOptions
 
 	for i := range encodeTests {
+		opts = nil
 		srcFN := fmt.Sprintf("testdata%csrcimg%c%s", os.PathSeparator, os.PathSeparator, encodeTests[i].srcFN)
 		dstFN := fmt.Sprintf("testdata%cactual%c%s", os.PathSeparator, os.PathSeparator, encodeTests[i].dstFN)
 		expectedFN := fmt.Sprintf("testdata%cexpected%c%s", os.PathSeparator, os.PathSeparator, encodeTests[i].expectedFN)
 		m = readImageFromFile(t, srcFN)
-		writeImageToFile(t, m, dstFN, "bmp")
+
+		switch encodeTests[i].testId {
+		case 30:
+			opts = new(EncoderOptions)
+			opts.SetDensity(3937, 3938)
+		}
+
+		writeImageToFile(t, m, dstFN, "bmp", opts)
 		compareFiles(t, expectedFN, dstFN)
 	}
 }
@@ -200,7 +215,7 @@ func TestDecode(t *testing.T) {
 		dstFN := fmt.Sprintf("testdata%cactual%c%s", os.PathSeparator, os.PathSeparator, decodeTests[i].dstFN)
 		expectedFN := fmt.Sprintf("testdata%cexpected%c%s", os.PathSeparator, os.PathSeparator, decodeTests[i].expectedFN)
 		m = readImageFromFile(t, srcFN)
-		writeImageToFile(t, m, dstFN, "png")
+		writeImageToFile(t, m, dstFN, "png", nil)
 		compareFiles(t, expectedFN, dstFN)
 	}
 }

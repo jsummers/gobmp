@@ -11,7 +11,24 @@ package gobmp
 import "image"
 import "io"
 
+// EncoderOptions stores options that can be passed to EncodeWithOptions().
+// Create an EncoderOptions object with new().
+type EncoderOptions struct {
+	densitySet   bool
+	xDens, yDens int
+	supportTrns  bool
+}
+
+// SetDensity sets the density to write to the output image's metadata, in
+// pixels per meter.
+func (opts *EncoderOptions) SetDensity(xDens, yDens int) {
+	opts.densitySet = true
+	opts.xDens = xDens
+	opts.yDens = yDens
+}
+
 type encoder struct {
+	opts         *EncoderOptions
 	w            io.Writer
 	m            image.Image
 	m_AsPaletted *image.Paletted
@@ -58,8 +75,13 @@ func (e *encoder) generateInfoHeader(h []byte) {
 	setWORD(h[12:14], 1) // biPlanes
 	setWORD(h[14:16], uint16(e.dstBitCount))
 	setDWORD(h[20:24], uint32(e.dstBitsSize))
-	setDWORD(h[24:28], 2835) // biXPelsPerMeter
-	setDWORD(h[28:32], 2835) // biYPelsPerMeter
+	if e.opts.densitySet {
+		setDWORD(h[24:28], uint32(e.opts.xDens))
+		setDWORD(h[28:32], uint32(e.opts.yDens))
+	} else {
+		setDWORD(h[24:28], 2835) // biXPelsPerMeter
+		setDWORD(h[28:32], 2835) // biYPelsPerMeter
+	}
 	setDWORD(h[32:36], uint32(e.nColors))
 }
 
@@ -229,13 +251,20 @@ func (e *encoder) strategize() error {
 	return nil
 }
 
-// Encode writes the Image m to w in BMP format.
-func Encode(w io.Writer, m image.Image) error {
+// EncodeWithOptions writes the Image m to w in BMP format, using the options
+// recorded in opts.
+// opts may be nil, in which case it behaves the same as Encode.
+func EncodeWithOptions(w io.Writer, m image.Image, opts *EncoderOptions) error {
 	var err error
 
 	e := new(encoder)
 	e.w = w
 	e.m = m
+	if opts != nil {
+		e.opts = opts
+	} else {
+		e.opts = new(EncoderOptions)
+	}
 
 	err = e.strategize()
 	if err != nil {
@@ -258,4 +287,9 @@ func Encode(w io.Writer, m image.Image) error {
 	}
 
 	return nil
+}
+
+// Encode writes the Image m to w in BMP format.
+func Encode(w io.Writer, m image.Image) error {
+	return EncodeWithOptions(w, m, nil)
 }

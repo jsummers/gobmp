@@ -18,7 +18,7 @@ Documentation
 Gobmp is designed to work the same as Go's standard
 [image modules](http://golang.org/pkg/image/).
 
-The (minimal) documentation may be read online at
+The documentation may be read online at
 [GoPkgDoc](http://go.pkgdoc.org/github.com/jsummers/gobmp).
 
 Or, after installing, type:
