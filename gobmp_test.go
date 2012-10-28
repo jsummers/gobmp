@@ -107,6 +107,7 @@ type encodeTestType struct {
 
 var encodeTests = []encodeTestType{
 	{10, "rgb8a.png", "rgb8a.bmp", "rgb8a.bmp"},
+	{11, "rgb8a.png", "rgb8a2.bmp", "rgb8a2.bmp"},
 	{20, "p8.png", "p8.bmp", "p8.bmp"},
 	{30, "p2.png", "p2.bmp", "p2.bmp"},
 	{40, "p1.png", "p1.bmp", "p1.bmp"},
@@ -126,8 +127,12 @@ func TestEncode(t *testing.T) {
 		m = readImageFromFile(t, srcFN)
 
 		switch encodeTests[i].testId {
+		case 11:
+			opts = new(EncoderOptions)
+			opts.SupportTransparency(true)
 		case 30:
 			opts = new(EncoderOptions)
+			opts.SupportTransparency(true)
 			opts.SetDensity(3937, 3938)
 		}
 
