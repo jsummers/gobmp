@@ -16,7 +16,8 @@ Documentation
 -------------
 
 Gobmp is designed to work the same as Go's standard
-[image modules](http://golang.org/pkg/image/).
+[image modules](http://golang.org/pkg/image/). Importing it will automatically
+cause the image.Decode function to support reading BMP files.
 
 The documentation may be read online at
 [GoPkgDoc](http://go.pkgdoc.org/github.com/jsummers/gobmp).
@@ -31,8 +32,9 @@ Status
 
 The decoder supports almost all types of BMP images.
 
-The images written by the encoder will be 1, 4, 8, or 24-bit uncompressed
-images.
+By default, the encoder will write a 24-bit RGB image, or a 1-, 4-, or 8-bit
+paletted image. Support for 32-bit RGBA images can optionally be enabled.
+Writing compressed images is not supported.
 
 
 License

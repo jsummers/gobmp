@@ -91,8 +91,8 @@ func (e *encoder) generateInfoHeader(h []byte) {
 		setDWORD(h[24:28], uint32(e.opts.xDens))
 		setDWORD(h[28:32], uint32(e.opts.yDens))
 	} else {
-		setDWORD(h[24:28], 2835) // biXPelsPerMeter
-		setDWORD(h[28:32], 2835) // biYPelsPerMeter
+		setDWORD(h[24:28], 2835)
+		setDWORD(h[28:32], 2835)
 	}
 	setDWORD(h[32:36], uint32(e.nColors))
 
@@ -111,7 +111,6 @@ func (e *encoder) writeHeaders() error {
 	h := make([]byte, 14+e.headerSize)
 	e.generateFileHeader(h[:14])
 	e.generateInfoHeader(h[14:])
-
 	_, err := e.w.Write(h[:])
 	return err
 }
@@ -184,33 +183,34 @@ func generateRow_GrayPal(e *encoder, j int, rowBuf []byte) {
 	}
 }
 
-// Read a row from the source image, and store it in rowBuf in 24-bit BMP format
+// Read a row from the source image, and store it in rowBuf in 24-bit BMP format.
 func generateRow_24(e *encoder, j int, rowBuf []byte) {
+	var s [3]uint32
 	for i := 0; i < e.width; i++ {
 		srcclr := e.m.At(e.srcBounds.Min.X+i, e.srcBounds.Min.Y+j)
-		r, g, b, _ := srcclr.RGBA()
-		rowBuf[i*3+0] = uint8(b >> 8)
-		rowBuf[i*3+1] = uint8(g >> 8)
-		rowBuf[i*3+2] = uint8(r >> 8)
+		s[2], s[1], s[0], _ = srcclr.RGBA()
+		for k := 0; k < 3; k++ {
+			rowBuf[i*3+k] = uint8(s[k] >> 8)
+		}
 	}
 }
 
-// Read a row from the source image, and store it in rowBuf in 32-bit BMP format
+// Read a row from the source image, and store it in rowBuf in 32-bit BMP format.
 func generateRow_32(e *encoder, j int, rowBuf []byte) {
-	var s [3]uint32
-	var a uint32
+	var s [4]uint32
 	for i := 0; i < e.width; i++ {
 		srcclr := e.m.At(e.srcBounds.Min.X+i, e.srcBounds.Min.Y+j)
-		s[2], s[1], s[0], a = srcclr.RGBA()
-		for k := 0; k < 3; k++ {
-			if a == 0 {
+		s[2], s[1], s[0], s[3] = srcclr.RGBA()
+		for k := 0; k < 4; k++ {
+			if s[3] == 0 {
 				rowBuf[i*4+k] = 0
+			} else if k == 3 || s[3] == 0xffff {
+				rowBuf[i*4+k] = uint8(s[k] >> 8)
 			} else {
 				// Convert to unassociated alpha
-				rowBuf[i*4+k] = uint8(0.5 + 255.0*(float64(s[k])/float64(a)))
+				rowBuf[i*4+k] = uint8(0.5 + 255.0*(float64(s[k])/float64(s[3])))
 			}
 		}
-		rowBuf[i*4+3] = uint8(a >> 8)
 	}
 }
 

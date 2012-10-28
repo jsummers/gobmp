@@ -51,7 +51,6 @@ type decoder struct {
 	hasBitFieldsSegment  bool
 	bitFieldsSegmentSize int
 	bitFields            [4]bitFieldsInfo
-	bitFieldsValid       bool // Is .bitFields set?
 }
 
 // An UnsupportedError reports that the input uses a valid but unimplemented
@@ -140,13 +139,9 @@ func decodeRow_16or32(d *decoder, buf []byte, j int) error {
 
 func decodeRow_24(d *decoder, buf []byte, j int) error {
 	for i := 0; i < d.width; i++ {
-		var r, g, b byte
-		b = buf[i*3+0]
-		g = buf[i*3+1]
-		r = buf[i*3+2]
-		d.img_NRGBA.Pix[j*d.img_NRGBA.Stride+i*4+0] = r
-		d.img_NRGBA.Pix[j*d.img_NRGBA.Stride+i*4+1] = g
-		d.img_NRGBA.Pix[j*d.img_NRGBA.Stride+i*4+2] = b
+		for k := 0; k < 3; k++ {
+			d.img_NRGBA.Pix[j*d.img_NRGBA.Stride+i*4+k] = buf[i*3+2-k]
+		}
 		d.img_NRGBA.Pix[j*d.img_NRGBA.Stride+i*4+3] = 255
 	}
 	return nil
@@ -172,17 +167,7 @@ func (d *decoder) readBitsUncompressed() error {
 		decodeRowFunc = decodeRow_8
 	case 24:
 		decodeRowFunc = decodeRow_24
-	case 16:
-		if !d.bitFieldsValid {
-			// Default bitfields for 16-bit images:
-			d.recordBitFields(0x7c00, 0x03e0, 0x001f, 0)
-		}
-		decodeRowFunc = decodeRow_16or32
-	case 32:
-		if !d.bitFieldsValid {
-			// Default bitfields for 32-bit images:
-			d.recordBitFields(0x00ff0000, 0x0000ff00, 0x000000ff, 0)
-		}
+	case 16, 32:
 		decodeRowFunc = decodeRow_16or32
 	default:
 		return nil
@@ -277,6 +262,16 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 		d.bitFieldsSegmentSize = 12
 	}
 
+	if d.biCompression == bI_RGB {
+		if d.bitCount == 16 {
+			// Default bitfields for 16-bit images:
+			d.recordBitFields(0x7c00, 0x03e0, 0x001f, 0)
+		} else if d.bitCount == 32 {
+			// Default bitfields for 32-bit images:
+			d.recordBitFields(0x00ff0000, 0x0000ff00, 0x000000ff, 0)
+		}
+	}
+
 	biClrUsed := getDWORD(h[32:36])
 	if biClrUsed > 10000 {
 		return FormatError(fmt.Sprintf("bad palette size %d", biClrUsed))
@@ -340,7 +335,6 @@ func readInfoHeader(d *decoder, decodeFn decodeInfoHeaderFuncType, configOnly bo
 }
 
 func (d *decoder) recordBitFields(r, g, b, a uint32) {
-	d.bitFieldsValid = true
 	d.bitFields[0].mask = r
 	d.bitFields[1].mask = g
 	d.bitFields[2].mask = b
@@ -394,11 +388,9 @@ func (d *decoder) readPalette() error {
 
 	d.dstPalette = make(color.Palette, d.dstPalNumEntries)
 	for i := 0; i < d.dstPalNumEntries; i++ {
-		var r, g, b byte
-		b = buf[i*d.srcPalBytesPerEntry+0]
-		g = buf[i*d.srcPalBytesPerEntry+1]
-		r = buf[i*d.srcPalBytesPerEntry+2]
-		d.dstPalette[i] = color.RGBA{r, g, b, 255}
+		d.dstPalette[i] = color.RGBA{buf[i*d.srcPalBytesPerEntry+2],
+			buf[i*d.srcPalBytesPerEntry+1],
+			buf[i*d.srcPalBytesPerEntry+0], 255}
 	}
 	return nil
 }
