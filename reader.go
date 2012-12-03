@@ -1,5 +1,5 @@
 // ◄◄◄ gobmp/reader.go ►►►
-// Copyright (c) 2012 Jason Summers
+// Copyright © 2012 Jason Summers
 // Use of this code is governed by an MIT-style license that can
 // be found in the readme.md file.
 //
@@ -149,27 +149,23 @@ func decodeRow_24(d *decoder, buf []byte, j int) error {
 
 type decodeRowFuncType func(d *decoder, buf []byte, j int) error
 
+var rowDecoders = map[int]decodeRowFuncType{
+	1:  decodeRow_1,
+	4:  decodeRow_4,
+	8:  decodeRow_8,
+	16: decodeRow_16or32,
+	24: decodeRow_24,
+	32: decodeRow_16or32,
+}
+
 func (d *decoder) readBitsUncompressed() error {
-	var decodeRowFunc decodeRowFuncType
-	var srcRowStride int
 	var err error
 
-	srcRowStride = ((d.width*d.bitCount + 31) / 32) * 4
-
+	srcRowStride := ((d.width*d.bitCount + 31) / 32) * 4
 	buf := make([]byte, srcRowStride)
 
-	switch d.bitCount {
-	case 1:
-		decodeRowFunc = decodeRow_1
-	case 4:
-		decodeRowFunc = decodeRow_4
-	case 8:
-		decodeRowFunc = decodeRow_8
-	case 24:
-		decodeRowFunc = decodeRow_24
-	case 16, 32:
-		decodeRowFunc = decodeRow_16or32
-	default:
+	decodeRowFunc := rowDecoders[d.bitCount]
+	if decodeRowFunc == nil {
 		return nil
 	}
 
@@ -213,22 +209,17 @@ func (d *decoder) skipBytes(n int) error {
 
 // If there is a gap before the bits, skip over it.
 func (d *decoder) readGap() error {
-	var currentOffset int
-	var gapSize int
-	currentOffset = 14 + int(d.headerSize) + d.bitFieldsSegmentSize + d.srcPalSizeInBytes
-
+	currentOffset := 14 + int(d.headerSize) + d.bitFieldsSegmentSize + d.srcPalSizeInBytes
 	if currentOffset == int(d.bfOffBits) {
 		return nil
 	}
 	if currentOffset > int(d.bfOffBits) {
 		return FormatError("bad bfOffBits field")
 	}
-	gapSize = int(d.bfOffBits) - currentOffset
+	gapSize := int(d.bfOffBits) - currentOffset
 
 	return d.skipBytes(gapSize)
 }
-
-type decodeInfoHeaderFuncType func(d *decoder, h []byte, configOnly bool) error
 
 // Read a 12-byte BITMAPCOREHEADER.
 func decodeInfoHeader12(d *decoder, h []byte, configOnly bool) error {
@@ -305,9 +296,23 @@ func decodeInfoHeader108(d *decoder, h []byte, configOnly bool) error {
 	return nil
 }
 
-func readInfoHeader(d *decoder, decodeFn decodeInfoHeaderFuncType, configOnly bool) error {
+type decodeInfoHeaderFuncType func(d *decoder, h []byte, configOnly bool) error
+
+var headerDecoders = map[uint32]decodeInfoHeaderFuncType{
+	12:  decodeInfoHeader12,
+	40:  decodeInfoHeader40,
+	108: decodeInfoHeader108,
+	124: decodeInfoHeader108,
+}
+
+func readInfoHeader(d *decoder, configOnly bool) error {
 	var h []byte
 	var err error
+
+	decodeFn := headerDecoders[d.headerSize]
+	if decodeFn == nil {
+		return UnsupportedError(fmt.Sprintf("BMP version (header size %d)", d.headerSize))
+	}
 
 	// Read the rest of the infoheader
 	h = make([]byte, d.headerSize)
@@ -330,6 +335,8 @@ func readInfoHeader(d *decoder, decodeFn decodeInfoHeaderFuncType, configOnly bo
 	if d.bitCount >= 1 && d.bitCount <= 8 {
 		d.dstHasPalette = true
 	}
+
+	d.srcPalSizeInBytes = d.srcPalNumEntries * d.srcPalBytesPerEntry
 
 	return nil
 }
@@ -420,21 +427,10 @@ func (d *decoder) readHeaders(configOnly bool) error {
 
 	d.headerSize = getDWORD(fh[14:18])
 
-	switch d.headerSize {
-	case 12:
-		err = readInfoHeader(d, decodeInfoHeader12, configOnly)
-	case 40:
-		err = readInfoHeader(d, decodeInfoHeader40, configOnly)
-	case 108, 124:
-		err = readInfoHeader(d, decodeInfoHeader108, configOnly)
-	default:
-		return UnsupportedError(fmt.Sprintf("BMP version (header size %d)", d.headerSize))
-	}
+	err = readInfoHeader(d, configOnly)
 	if err != nil {
 		return err
 	}
-
-	d.srcPalSizeInBytes = d.srcPalNumEntries * d.srcPalBytesPerEntry
 
 	return nil
 }
@@ -476,6 +472,7 @@ func Decode(r io.Reader) (image.Image, error) {
 		return nil, err
 	}
 
+	// Make sure bitcount and "compression" are valid and compatible.
 	switch d.biCompression {
 	case bI_RGB:
 		if d.bitCount != 1 && d.bitCount != 4 && d.bitCount != 8 && d.bitCount != 16 &&
@@ -497,7 +494,9 @@ func Decode(r io.Reader) (image.Image, error) {
 	default:
 		return nil, UnsupportedError(fmt.Sprintf("compression or image type %d", d.biCompression))
 	}
-	// If 'int' is 32 bits, an NRGBA image can't handle more than (2^31-1)/4 pixels.
+
+	// Assuming 'int' is 32 bits, an NRGBA image can't handle more than (2^31-1)/4
+	// pixels. This test is more conservative than it could be.
 	if d.width > 46340 || d.height > 46340 || d.width*d.height >= 0x20000000 {
 		return nil, UnsupportedError("dimensions too large")
 	}

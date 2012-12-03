@@ -1,5 +1,5 @@
 // ◄◄◄ gobmp/rle.go ►►►
-// Copyright (c) 2012 Jason Summers
+// Copyright © 2012 Jason Summers
 // Use of this code is governed by an MIT-style license that can
 // be found in the readme.md file.
 //
@@ -140,7 +140,7 @@ func (d *decoder) readBitsRLE() error {
 			//
 			// Any pixels skipped by special codes will be left at whatever
 			// image.NewPaletted() initialized them to, which we assume is 0,
-			// for palette entry 0.
+			// meaning palette entry 0.
 			if b2 == 0 { // End of row
 				rle.ypos--
 				rle.xpos = 0

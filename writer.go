@@ -1,5 +1,5 @@
 // ◄◄◄ gobmp/writer.go ►►►
-// Copyright (c) 2012 Jason Summers
+// Copyright © 2012 Jason Summers
 // Use of this code is governed by an MIT-style license that can
 // be found in the readme.md file.
 //
