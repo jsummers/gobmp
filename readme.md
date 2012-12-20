@@ -20,7 +20,7 @@ Gobmp is designed to work the same as Go's standard
 cause the image.Decode function to support reading BMP files.
 
 The documentation may be read online at
-[GoPkgDoc](http://go.pkgdoc.org/github.com/jsummers/gobmp).
+[GoDoc](http://godoc.org/github.com/jsummers/gobmp).
 
 Or, after installing, type:
 
