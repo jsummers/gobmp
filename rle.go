@@ -9,45 +9,11 @@
 package gobmp
 
 import "io"
+import "bufio"
 
 type rleState struct {
 	xpos, ypos   int // Position in the target image
-	bufPos       int
-	bufUsed      int // Number of valid bytes in .buf
-	eofFlag      bool
 	badColorFlag bool
-	buf          []byte // RLE data buffer
-}
-
-// Read until rle.buf is full, or EOF or an error is encountered.
-// On error other than EOF, returns the error.
-// On EOF, sets rle.eofFlag.
-func (d *decoder) rleReadMore(rle *rleState) error {
-	var n int
-	var err error
-
-	rle.bufPos = 0
-	rle.bufUsed = 0
-
-	for {
-		if rle.eofFlag {
-			break
-		}
-		if rle.bufUsed >= len(rle.buf) {
-			break
-		}
-
-		n, err = d.r.Read(rle.buf[rle.bufUsed:])
-		if err != nil {
-			if err == io.EOF {
-				rle.eofFlag = true
-			} else {
-				return err
-			}
-		}
-		rle.bufUsed += n
-	}
-	return nil
 }
 
 func (d *decoder) rlePutPixel(rle *rleState, v byte) {
@@ -74,10 +40,10 @@ func (d *decoder) readBitsRLE() error {
 	var deltaFlag bool
 	var k int
 
+	bufferedR := bufio.NewReader(d.r)
 	rle := new(rleState)
 	rle.xpos = 0
 	rle.ypos = d.height - 1 // RLE images are not allowed to be top-down.
-	rle.buf = make([]byte, 4096)
 
 	for {
 		if rle.badColorFlag {
@@ -88,22 +54,17 @@ func (d *decoder) readBitsRLE() error {
 			break // Reached the end of the target image; may as well stop
 		}
 
-		// If there aren't at least 2 bytes available, read more data
-		// from the file.
-		if rle.bufUsed-rle.bufPos < 2 {
-			err = d.rleReadMore(rle)
-			if err != nil {
-				return err
-			}
-			if rle.bufUsed < 2 {
-				break // End of file, presumably
-			}
+		// Read the next two bytes
+		b1, err = bufferedR.ReadByte()
+		if err == nil {
+			b2, err = bufferedR.ReadByte()
 		}
-
-		// Look at the next two bytes
-		b1 = rle.buf[rle.bufPos]
-		b2 = rle.buf[rle.bufPos+1]
-		rle.bufPos += 2
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
 
 		if uncPixelsLeft > 0 {
 			if d.biCompression == bI_RLE4 {

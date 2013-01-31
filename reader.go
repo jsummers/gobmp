@@ -435,7 +435,7 @@ func (d *decoder) readHeaders(configOnly bool) error {
 	return nil
 }
 
-// Decodeconfig returns the color model and dimensions of the BMP image without
+// DecodeConfig returns the color model and dimensions of the BMP image without
 // decoding the entire image.
 func DecodeConfig(r io.Reader) (image.Config, error) {
 	var err error

@@ -42,7 +42,7 @@ License
 
 Gobmp is distributed under an MIT-style license.
 
-Copyright &copy; 2012 Jason Summers
+Copyright &copy; 2012-2013 Jason Summers
 <[jason1@pobox.com](mailto:jason1@pobox.com)>
 
 <pre>
