@@ -71,42 +71,15 @@ func getDWORD(b []byte) uint32 {
 	return uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
 }
 
-func decodeRow_1(d *decoder, buf []byte, j int) error {
+func decodeRow_paletted(d *decoder, buf []byte, j int) error {
 	for i := 0; i < d.width; i++ {
 		var v byte
-		if buf[i/8]&(1<<uint(7-i%8)) == 0 {
-			v = 0
-		} else {
-			v = 1
-		}
-		if int(v) >= d.dstPalNumEntries {
-			return FormatError("palette index out of range")
-		}
-		d.img_Paletted.Pix[j*d.img_Paletted.Stride+i] = v
-	}
-	return nil
-}
 
-func decodeRow_4(d *decoder, buf []byte, j int) error {
-	for i := 0; i < d.width; i++ {
-		var v byte
-		if i&0x01 == 0 {
-			v = buf[i/2] >> 4
-		} else {
-			v = buf[i/2] & 0x0f
+		switch(d.bitCount) {
+		case 8: v = buf[i];
+		case 4: v = (buf[i/2] >> (4 * (1 - uint(i)%2))) & 0x0f
+		case 1: v = (buf[i/8] >> (1 * (7 - uint(i)%8))) & 0x01
 		}
-		if int(v) >= d.dstPalNumEntries {
-			return FormatError("palette index out of range")
-		}
-		d.img_Paletted.Pix[j*d.img_Paletted.Stride+i] = v
-	}
-	return nil
-}
-
-func decodeRow_8(d *decoder, buf []byte, j int) error {
-	for i := 0; i < d.width; i++ {
-		var v byte
-		v = buf[i]
 		if int(v) >= d.dstPalNumEntries {
 			return FormatError("palette index out of range")
 		}
@@ -150,9 +123,9 @@ func decodeRow_24(d *decoder, buf []byte, j int) error {
 type decodeRowFuncType func(d *decoder, buf []byte, j int) error
 
 var rowDecoders = map[int]decodeRowFuncType{
-	1:  decodeRow_1,
-	4:  decodeRow_4,
-	8:  decodeRow_8,
+	1:  decodeRow_paletted,
+	4:  decodeRow_paletted,
+	8:  decodeRow_paletted,
 	16: decodeRow_16or32,
 	24: decodeRow_24,
 	32: decodeRow_16or32,
