@@ -78,6 +78,7 @@ func decodeRow_paletted(d *decoder, buf []byte, j int) error {
 		switch(d.bitCount) {
 		case 8: v = buf[i];
 		case 4: v = (buf[i/2] >> (4 * (1 - uint(i)%2))) & 0x0f
+		case 2: v = (buf[i/4] >> (2 * (3 - uint(i)%4))) & 0x03
 		case 1: v = (buf[i/8] >> (1 * (7 - uint(i)%8))) & 0x01
 		}
 		if int(v) >= d.dstPalNumEntries {
@@ -124,6 +125,7 @@ type decodeRowFuncType func(d *decoder, buf []byte, j int) error
 
 var rowDecoders = map[int]decodeRowFuncType{
 	1:  decodeRow_paletted,
+	2:  decodeRow_paletted,
 	4:  decodeRow_paletted,
 	8:  decodeRow_paletted,
 	16: decodeRow_16or32,
@@ -448,8 +450,10 @@ func Decode(r io.Reader) (image.Image, error) {
 	// Make sure bitcount and "compression" are valid and compatible.
 	switch d.biCompression {
 	case bI_RGB:
-		if d.bitCount != 1 && d.bitCount != 4 && d.bitCount != 8 && d.bitCount != 16 &&
-			d.bitCount != 24 && d.bitCount != 32 {
+		// We allow bitCount=2 because Windows CE defines it to be valid
+		// (at least if headerSize=40).
+		if d.bitCount != 1 && d.bitCount != 2 && d.bitCount != 4 && d.bitCount != 8 &&
+			d.bitCount != 16 && d.bitCount != 24 && d.bitCount != 32 {
 			return nil, FormatError(fmt.Sprintf("bad bit count %d", d.bitCount))
 		}
 	case bI_RLE4:
