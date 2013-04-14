@@ -268,14 +268,15 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 	}
 	d.srcPalBytesPerEntry = 4
 
+	// Figure out how many colors (that we care about) are in the palette.
 	if d.bitCount >= 1 && d.bitCount <= 8 {
-		if biClrUsed == 0 {
+		if biClrUsed == 0 || biClrUsed > (1<<uint(d.bitCount)) {
 			d.srcPalNumEntries = 1 << uint(d.bitCount)
 		} else {
 			d.srcPalNumEntries = int(biClrUsed)
 		}
 	} else {
-		d.srcPalNumEntries = int(biClrUsed)
+		d.srcPalNumEntries = 0
 	}
 
 	return nil
