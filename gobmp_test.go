@@ -206,6 +206,8 @@ var decodeTests = []decodeTestType{
 	{"pal1bg.bmp", "pal1bg.png", "pal1bg.png"},
 	{"pal8offs.bmp", "pal8offs.png", "pal8.png"},
 	{"pal8os2.bmp", "pal8os2.png", "pal8os2.png"},
+	{"pal8os2v2-16.bmp", "pal8os2v2-16.png", "pal8os2.png"},
+	{"pal8os2v2.bmp", "pal8os2v2.png", "pal8.png"},
 	{"pal8v4.bmp", "pal8v4.png", "pal8.png"},
 	{"pal8v5.bmp", "pal8v5.png", "pal8.png"},
 	{"rgb16-565pal.bmp", "rgb16-565.png", "rgb16-565.png"},

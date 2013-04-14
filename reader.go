@@ -236,8 +236,12 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 	if configOnly {
 		return nil
 	}
-	d.biCompression = getDWORD(h[16:20])
-	if d.biCompression == bI_BITFIELDS && d.headerSize == 40 {
+
+	if len(h) >= 20 {
+		d.biCompression = getDWORD(h[16:20])
+	}
+
+	if d.biCompression == bI_BITFIELDS && d.headerSize == 40 && d.bitCount != 1 {
 		d.hasBitFieldsSegment = true
 		d.bitFieldsSegmentSize = 12
 	}
@@ -252,7 +256,10 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 		}
 	}
 
-	biClrUsed := getDWORD(h[32:36])
+	var biClrUsed uint32
+	if len(h) >= 36 {
+		biClrUsed = getDWORD(h[32:36])
+	}
 	if biClrUsed > 10000 {
 		return FormatError(fmt.Sprintf("bad palette size %d", biClrUsed))
 	}
@@ -287,19 +294,19 @@ func decodeInfoHeader108(d *decoder, h []byte, configOnly bool) error {
 
 type decodeInfoHeaderFuncType func(d *decoder, h []byte, configOnly bool) error
 
-var headerDecoders = map[uint32]decodeInfoHeaderFuncType{
-	12:  decodeInfoHeader12,
-	40:  decodeInfoHeader40,
-	108: decodeInfoHeader108,
-	124: decodeInfoHeader108,
-}
-
 func readInfoHeader(d *decoder, configOnly bool) error {
 	var h []byte
 	var err error
+	var decodeFn decodeInfoHeaderFuncType
 
-	decodeFn := headerDecoders[d.headerSize]
-	if decodeFn == nil {
+	switch d.headerSize {
+	case 12:
+		decodeFn = decodeInfoHeader12
+	case 16, 20, 24, 32, 36, 40, 42, 44, 46, 48, 60, 64:
+		decodeFn = decodeInfoHeader40
+	case 108, 124:
+		decodeFn = decodeInfoHeader108
+	default:
 		return UnsupportedError(fmt.Sprintf("BMP version (header size %d)", d.headerSize))
 	}
 
@@ -479,7 +486,9 @@ func Decode(r io.Reader) (image.Image, error) {
 			return nil, FormatError(fmt.Sprintf("bad RLE8 bit count %d", d.bitCount))
 		}
 	case bI_BITFIELDS:
-		if d.bitCount != 16 && d.bitCount != 32 {
+		if d.bitCount == 1 {
+			return nil, UnsupportedError("Huffman 1D compression")
+		} else if d.bitCount != 16 && d.bitCount != 32 {
 			return nil, FormatError(fmt.Sprintf("bad BITFIELDS bit count %d", d.bitCount))
 		}
 	default:
