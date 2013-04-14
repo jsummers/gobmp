@@ -435,36 +435,8 @@ func (d *decoder) readHeaders(configOnly bool) error {
 	return nil
 }
 
-// DecodeConfig returns the color model and dimensions of the BMP image without
-// decoding the entire image.
-func DecodeConfig(r io.Reader) (image.Config, error) {
+func (d *decoder) readMain(r io.Reader, configOnly bool) (image.Image, error) {
 	var err error
-	var cfg image.Config
-
-	d := new(decoder)
-	d.r = r
-	err = d.readHeaders(true)
-	if err != nil {
-		return cfg, err
-	}
-
-	cfg.Width = d.width
-	cfg.Height = d.height
-	if d.dstHasPalette {
-		cfg.ColorModel = color.Palette(nil)
-	} else {
-		cfg.ColorModel = color.NRGBAModel
-	}
-
-	return cfg, nil
-}
-
-// Decode reads a BMP image from r and returns it as an image.Image.
-func Decode(r io.Reader) (image.Image, error) {
-	var err error
-
-	d := new(decoder)
-	d.r = r
 
 	// Read the FILEHEADER and INFOHEADER.
 	err = d.readHeaders(false)
@@ -521,6 +493,10 @@ func Decode(r io.Reader) (image.Image, error) {
 		}
 	}
 
+	if configOnly {
+		return nil, nil
+	}
+
 	// Create the target image.
 	if d.dstHasPalette {
 		d.img_Paletted = image.NewPaletted(image.Rect(0, 0, d.width, d.height), d.dstPalette)
@@ -548,6 +524,42 @@ func Decode(r io.Reader) (image.Image, error) {
 		return d.img_Paletted, nil
 	}
 	return d.img_NRGBA, nil
+}
+
+// Decode reads a BMP image from r and returns it as an image.Image.
+func Decode(r io.Reader) (image.Image, error) {
+	var err error
+
+	d := new(decoder)
+	d.r = r
+
+	im, err := d.readMain(r, false)
+	return im, err
+}
+
+// DecodeConfig returns the color model and dimensions of the BMP image without
+// decoding the entire image.
+func DecodeConfig(r io.Reader) (image.Config, error) {
+	var err error
+	var cfg image.Config
+
+	d := new(decoder)
+	d.r = r
+
+	_, err = d.readMain(r, true)
+	if err != nil {
+		return cfg, err
+	}
+
+	cfg.Width = d.width
+	cfg.Height = d.height
+	if d.dstHasPalette {
+		cfg.ColorModel = d.dstPalette
+	} else {
+		cfg.ColorModel = color.NRGBAModel
+	}
+
+	return cfg, nil
 }
 
 func init() {

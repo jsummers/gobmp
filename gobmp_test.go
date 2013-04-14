@@ -191,7 +191,7 @@ func decodeConfig(t *testing.T, shortFN string, hasPalette bool, pal_len int) {
 
 func TestDecodeConfig(t *testing.T) {
 	decodeConfig(t, "rgb24.bmp", false, 0)
-	decodeConfig(t, "pal8.bmp", true, 0)
+	decodeConfig(t, "pal8.bmp", true, 252)
 }
 
 type decodeTestType struct {
