@@ -209,6 +209,16 @@ func decodeInfoHeader12(d *decoder, h []byte, configOnly bool) error {
 	if d.bitCount >= 1 && d.bitCount <= 8 {
 		d.srcPalNumEntries = 1 << uint(d.bitCount)
 	}
+
+	// Figure out how many palette entries there are.
+	// A full-size palette is expected, but if the palette is overlapped by the
+	// bitmap, we assume the palette is less than full size.
+	paletteStart := 14 + int(d.headerSize)
+	paletteEnd := paletteStart + d.srcPalBytesPerEntry*d.srcPalNumEntries
+	if int(d.bfOffBits) >= paletteStart+d.srcPalBytesPerEntry && int(d.bfOffBits) < paletteEnd {
+		d.srcPalNumEntries = (int(d.bfOffBits) - paletteStart) / 3
+	}
+
 	return nil
 }
 
