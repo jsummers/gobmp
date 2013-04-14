@@ -75,11 +75,15 @@ func decodeRow_paletted(d *decoder, buf []byte, j int) error {
 	for i := 0; i < d.width; i++ {
 		var v byte
 
-		switch(d.bitCount) {
-		case 8: v = buf[i];
-		case 4: v = (buf[i/2] >> (4 * (1 - uint(i)%2))) & 0x0f
-		case 2: v = (buf[i/4] >> (2 * (3 - uint(i)%4))) & 0x03
-		case 1: v = (buf[i/8] >> (1 * (7 - uint(i)%8))) & 0x01
+		switch d.bitCount {
+		case 8:
+			v = buf[i]
+		case 4:
+			v = (buf[i/2] >> (4 * (1 - uint(i)%2))) & 0x0f
+		case 2:
+			v = (buf[i/4] >> (2 * (3 - uint(i)%4))) & 0x03
+		case 1:
+			v = (buf[i/8] >> (1 * (7 - uint(i)%8))) & 0x01
 		}
 		if int(v) >= d.dstPalNumEntries {
 			return FormatError("palette index out of range")

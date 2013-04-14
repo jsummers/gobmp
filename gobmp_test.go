@@ -1,5 +1,5 @@
 // ◄◄◄ gobmp/gobmp_test.go ►►►
-// 
+//
 // Copyright © 2012 Jason Summers
 
 package gobmp
