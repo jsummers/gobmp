@@ -86,7 +86,10 @@ func decodeRow_paletted(d *decoder, buf []byte, j int) error {
 			v = (buf[i/8] >> (1 * (7 - uint(i)%8))) & 0x01
 		}
 		if int(v) >= d.dstPalNumEntries {
-			return FormatError("palette index out of range")
+			// Out-of-range palette index.
+			// Most BMP viewers use the first palette color for such pixels, so
+			// that's what we'll do.
+			v = 0
 		}
 		d.img_Paletted.Pix[j*d.img_Paletted.Stride+i] = v
 	}
