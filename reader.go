@@ -266,7 +266,6 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 	if biClrUsed > 10000 {
 		return FormatError(fmt.Sprintf("bad palette size %d", biClrUsed))
 	}
-	d.srcPalBytesPerEntry = 4
 
 	// Figure out how many colors (that we care about) are in the palette.
 	if d.bitCount >= 1 && d.bitCount <= 8 {
@@ -277,6 +276,17 @@ func decodeInfoHeader40(d *decoder, h []byte, configOnly bool) error {
 		}
 	} else {
 		d.srcPalNumEntries = 0
+	}
+
+	d.srcPalBytesPerEntry = 4
+
+	if d.headerSize == 64 && d.srcPalNumEntries > 0 {
+		// A hack to allow (invalid?) OS/2v2 BMPs that have 3 bytes per palette
+		// entry instead of 4.
+		if 14+d.headerSize+uint32(d.bitFieldsSegmentSize)+3*uint32(d.srcPalNumEntries) ==
+			d.bfOffBits {
+			d.srcPalBytesPerEntry = 3
+		}
 	}
 
 	return nil
