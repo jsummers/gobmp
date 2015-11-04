@@ -300,12 +300,12 @@ func decodeInfoHeader108(d *decoder, h []byte, configOnly bool) error {
 	}
 
 	if d.biCompression == bI_BITFIELDS {
-		var abf uint32
+		var bf_alpha uint32
 		if len(h) >= 56 {
-			abf = getDWORD(h[52:56])
+			bf_alpha = getDWORD(h[52:56])
 		}
 		d.recordBitFields(getDWORD(h[40:44]), getDWORD(h[44:48]),
-			getDWORD(h[48:52]), abf)
+			getDWORD(h[48:52]), bf_alpha)
 	}
 	return nil
 }
@@ -577,5 +577,5 @@ func DecodeConfig(r io.Reader) (image.Config, error) {
 }
 
 func init() {
-	image.RegisterFormat("bmp", "BM????\x00\x00\x00\x00", Decode, DecodeConfig)
+	image.RegisterFormat("bmp", "BM", Decode, DecodeConfig)
 }
