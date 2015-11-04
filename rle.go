@@ -29,7 +29,17 @@ func (d *decoder) rlePutPixel(rle *rleState, v byte) {
 	}
 
 	// Set the pixel, and advance the current position.
-	d.img_Paletted.Pix[rle.ypos*d.img_Paletted.Stride+rle.xpos] = v
+	var dstRow int
+
+	if d.isTopDown {
+		// Top-down RLE-compressed images are not legal in any known BMP
+		// specification, but we'll tolerate them.
+		dstRow = rle.ypos
+	} else {
+		dstRow = d.height - rle.ypos - 1
+	}
+
+	d.img_Paletted.Pix[dstRow*d.img_Paletted.Stride+rle.xpos] = v
 	rle.xpos++
 }
 
@@ -43,14 +53,14 @@ func (d *decoder) readBitsRLE() error {
 	bufferedR := bufio.NewReader(d.r)
 	rle := new(rleState)
 	rle.xpos = 0
-	rle.ypos = d.height - 1 // RLE images are not allowed to be top-down.
+	rle.ypos = 0
 
 	for {
 		if rle.badColorFlag {
 			return FormatError("palette index out of range")
 		}
 
-		if rle.ypos < 0 || (rle.ypos == 0 && rle.xpos >= d.width) {
+		if rle.ypos >= d.height || (rle.ypos == d.height && rle.xpos >= d.width) {
 			break // Reached the end of the target image; may as well stop
 		}
 
@@ -94,7 +104,7 @@ func (d *decoder) readBitsRLE() error {
 			}
 		} else if deltaFlag {
 			rle.xpos += int(b1)
-			rle.ypos -= int(b2)
+			rle.ypos += int(b2)
 			deltaFlag = false
 		} else if b1 == 0 {
 			// An uncompressed run, or a special code.
@@ -103,7 +113,7 @@ func (d *decoder) readBitsRLE() error {
 			// image.NewPaletted() initialized them to, which we assume is 0,
 			// meaning palette entry 0.
 			if b2 == 0 { // End of row
-				rle.ypos--
+				rle.ypos++
 				rle.xpos = 0
 			} else if b2 == 1 { // End of bitmap
 				break
