@@ -107,7 +107,13 @@ func decodeRow_16or32(d *decoder, buf []byte, j int) error {
 		for k := 0; k < 4; k++ {
 			var sv uint8
 			if d.bitFields[k].mask == 0 {
-				sv = 255
+				if k == 3 {
+					// If alpha mask is missing, make the pixel opaque.
+					sv = 255
+				} else {
+					// If some other mask is missing, who knows what to do?
+					sv = 0
+				}
 			} else {
 				sv = uint8(0.5 + float64((v&d.bitFields[k].mask)>>d.bitFields[k].shift)*
 					d.bitFields[k].scale)
