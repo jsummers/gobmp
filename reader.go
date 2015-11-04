@@ -300,8 +300,12 @@ func decodeInfoHeader108(d *decoder, h []byte, configOnly bool) error {
 	}
 
 	if d.biCompression == bI_BITFIELDS {
+		var abf uint32
+		if len(h) >= 56 {
+			abf = getDWORD(h[52:56])
+		}
 		d.recordBitFields(getDWORD(h[40:44]), getDWORD(h[44:48]),
-			getDWORD(h[48:52]), getDWORD(h[52:56]))
+			getDWORD(h[48:52]), abf)
 	}
 	return nil
 }
@@ -318,7 +322,7 @@ func readInfoHeader(d *decoder, configOnly bool) error {
 		decodeFn = decodeInfoHeader12
 	case 16, 20, 24, 32, 36, 40, 42, 44, 46, 48, 60, 64:
 		decodeFn = decodeInfoHeader40
-	case 108, 124:
+	case 52, 56, 108, 124:
 		decodeFn = decodeInfoHeader108
 	default:
 		return UnsupportedError(fmt.Sprintf("BMP version (header size %d)", d.headerSize))
