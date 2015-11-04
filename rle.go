@@ -60,7 +60,7 @@ func (d *decoder) readBitsRLE() error {
 			return FormatError("palette index out of range")
 		}
 
-		if rle.ypos >= d.height || (rle.ypos == d.height && rle.xpos >= d.width) {
+		if rle.ypos >= d.height || (rle.ypos == (d.height-1) && rle.xpos >= d.width) {
 			break // Reached the end of the target image; may as well stop
 		}
 
